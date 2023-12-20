@@ -75,18 +75,24 @@ class DynaAgent(Environment):
 
         return None
 
+    def _init_action_taken(self):
+
+        #1 = action taken, 0 = action not taken yet
+
+        self.action_taken = np.zeros(np.shape(self.action_count))
+
     def _update_experience_buffer(self, s, a, r, s1):
 
         '''
         Update the experience buffer (world model)
         Input arguments:
             s  -- initial state
-            a  -- chosen action
+            a  -- chosen action         
             r  -- received reward
             s1 -- next state
         '''
 
-        # complete the code
+        self.experience_buffer[s*self.num_actions+a] = [s,a,r,s1]
 
         return None
 
@@ -102,7 +108,10 @@ class DynaAgent(Environment):
             bonus -- True / False whether to use exploration bonus or not
         '''
 
-        # complete the code
+        self.Q[s,a] += self.alpha*(r+self.gamma*np.max(self.Q[s1])-self.Q[s,a])
+
+        if bonus == True:
+            self.Q[s,a] += self.alpha*(r+self.epsilon*np.sqrt(self.action_count[s,a])+self.gamma*np.max(self.Q[s1])-self.Q[s,a])
 
         return None
 
@@ -115,8 +124,19 @@ class DynaAgent(Environment):
             s  -- initial state
             a  -- chosen action
         '''
+        self.action_count += 1
+        self.action_count[s,a] = 0
 
-        # complete the code
+        '''
+
+        if self.action_taken[s,a] == 0:
+            self.action_taken[s,a] = 1
+        for states in range(np.shape(self.action_taken)[0]):
+            for actions in range(np.shape(self.action_taken)[1]):
+                if self.action_taken[states,actions] == 1:
+                    self.action_count[states,actions] = self.action_count[states,actions] + 1
+                    self.action_count[s,a] = 0
+        '''
 
         return None
 
@@ -144,10 +164,13 @@ class DynaAgent(Environment):
         Output:
             a -- index of action to be chosen
         '''
+        
+        if np.all(np.unique(self.Q[s])==self.Q[s,0]):
+            a = np.random.choice(len(self.Q[s]))
+        else:
+            a = np.argmax(self.Q[s]) 
 
-        # complete the code
-
-        return None
+        return a
 
     def _plan(self, num_planning_updates):
 
@@ -156,8 +179,20 @@ class DynaAgent(Environment):
         Input arguments:
             num_planning_updates -- number of planning updates to execute
         '''
+        for _ in range(num_planning_updates):
+            mod = np.random.randint(self.experience_buffer.shape[0])
+            s,a,r,s1 = self.experience_buffer[mod]
+            self._update_qvals(s, a, r, s1, bonus=True)
+        
+        '''
+        s = np.random.randint(self.num_states)
 
-        # complete the code
+        for i in range(num_planning_updates):
+            a = self._policy(s)
+            _, _, r, s1= self.experience_buffer[s*self.num_actions+a]
+            self._update_qvals(s, a, r, s1, bonus=True)
+            s = s1 
+         '''       
 
         return None
 
@@ -184,6 +219,7 @@ class DynaAgent(Environment):
             self._init_experience_buffer()
             self._init_action_count()
             self._init_history()
+            self._init_action_taken()
 
             self.s = self.start_state
 
@@ -192,7 +228,7 @@ class DynaAgent(Environment):
             # choose action
             a  = self._policy(self.s)
             # get new state
-            s1 = np.random.choice(np.arange(self.num_states), p=self.T[self.s, a, :])
+            s1 = np.random.choice(np.arange(self.num_states), p=(self.T[self.s, a, :]))
             # receive reward
             r  = self.R[self.s, a]
             # learning
@@ -239,7 +275,83 @@ class TwoStepAgent:
         self.p      = p
 
         return None
+    
+    def _init_env(self):
+        #Initialise environment
+        self.num_actions = 2
+        self.num_states = 3
+        self.start = 0
+        return None
         
+    def _init_q(self): # NET Q values
+        num_actions = 2
+        num_states = 3
+        self.q = np.zeros((num_states,num_actions))
+        return None 
+    
+    def _init_model_tran(self): #Middle transition to be learned
+        self.model_tran = np.array([[0.7, 0.3],[0.3, 0.7]])
+
+    def _init_tran_mat(self): #Transition matrix for the ones we can actually pick
+        self.tran_mat = np.ones((2,2))*0.5
+        return None
+    
+    def update_trans_mat(self,s1,a): #Softmax
+        self.tran_mat[s1,a] = np.exp(self.)
+
+    def _init_actions(self):
+        self.actions = np.random.randint(2, size=3) #3 actions
+
+    def _init_rewards(self):
+        self.rewards = np.random.uniform(0.25,0.75,4)
+
+        return None
+    
+    def update_rewards(self):
+        noise = np.random.normal(0,0.025)
+        for r in self.rewards:
+            if r > 0.75:
+                r -= np.absolute(noise)
+            elif r < 0.25:
+                r += np.absolute(noise)
+            else:
+                r += noise
+    
+    def _init_qtd(self): #model free q 
+        num_actions = 2
+        num_states = 3
+        self.qtd = np.zeros((num_states,num_actions))
+
+        return None
+
+    def update_qtd(self):
+        #Find Q1
+        delta = self.qtd[1,self.actions[1]] - self.qtd[0,self.actions[0]] #R is 0 here
+        self.qtd[0,self.actions[0]] += self.alpha1*delta
+
+        #Find Q2 
+        delta2 = self.rewards - self.qtd[1,self.actions[1]]
+        self.qtd[1,self.actions[1]] += self.alpha2*delta2
+    
+        #Eligibility trace
+        self.qtd[0,self.actions[0]] += self.alpha1 * self.lam * delta2
+
+    def _init_qmb(self):
+        num_actions = 2
+        num_states = 3
+        self.qmb = np.zeros((num_states,num_actions))
+
+        return None
+
+    def update_qmb(self,a):
+        #Q_mb = Q_td at stage 2 
+        self.qmb[1] = self.qtd[1]
+        self.qmb[0,a] = self.model_tran[a,0] * np.max(self.qtd[1]) + self.model_tran[a,1] * np.max(self.qtd[2]) 
+
+        return None
+        
+
+
     def _init_history(self):
 
         '''
